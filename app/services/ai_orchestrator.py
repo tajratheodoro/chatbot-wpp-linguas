@@ -6,6 +6,8 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
+from app.config import Settings, get_settings
+from app.core.guardrails import GuardrailsEngine
 from app.database.vector_store import CurriculumVectorStore
 
 SYSTEM_PERSONA = "Você é um professor de inglês rigoroso que corrige exercícios de alunos"
@@ -25,17 +27,32 @@ class ChatModel(Protocol):
         """Invoke the chat model asynchronously."""
 
 
+def _require_openai_api_key(settings: Settings) -> str:
+    """Return the configured OpenAI API key or raise a safe error."""
+    if not settings.openai_api_key:
+        raise ValueError("OPENAI_API_KEY is not configured")
+    return settings.openai_api_key
+
+
 class AIOrchestrator:
-    """Coordinate RAG retrieval and asynchronous AI responses."""
+    """Coordinate guardrails, RAG retrieval and asynchronous AI responses."""
 
     def __init__(
         self,
         model: ChatModel | BaseChatModel | None = None,
         vector_store: ContextStore | None = None,
+        guardrails_engine: GuardrailsEngine | None = None,
+        settings: Settings | None = None,
     ) -> None:
-        """Initialize the orchestrator with injectable model and context store."""
-        self._model = model or ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
-        self._vector_store = vector_store or CurriculumVectorStore()
+        """Initialize the orchestrator with injectable model and safety boundaries."""
+        resolved_settings = settings or get_settings()
+        self._model = model or ChatOpenAI(
+            model="gpt-4o-mini",
+            temperature=0.2,
+            api_key=_require_openai_api_key(resolved_settings),
+        )
+        self._vector_store = vector_store or CurriculumVectorStore(settings=resolved_settings)
+        self._guardrails_engine = guardrails_engine or GuardrailsEngine()
         self._prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", SYSTEM_PERSONA),
@@ -49,16 +66,20 @@ class AIOrchestrator:
         )
 
     async def generate_response(self, message: str) -> str:
-        """Generate an AI response using retrieved curriculum context."""
+        """Generate an AI response after validating input with guardrails."""
         normalized_message = message.strip()
         if not normalized_message:
             raise ValueError("message must not be empty")
 
-        context = await self._vector_store.search_context(normalized_message)
+        guardrails_check = await self._guardrails_engine.validate_input(normalized_message)
+        if not guardrails_check.allowed:
+            return guardrails_check.response or "Vamos focar no exercício de inglês."
+
+        context = await self._vector_store.search_context(guardrails_check.message)
         prompt_value = await self._prompt.ainvoke(
             {
                 "context": context or "Nenhum contexto curricular encontrado.",
-                "message": normalized_message,
+                "message": guardrails_check.message,
             }
         )
         response = await self._model.ainvoke(prompt_value)

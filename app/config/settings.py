@@ -20,9 +20,10 @@ class Settings(BaseSettings):
         validation_alias="EVOLUTION_API_URL",
     )
     evolution_api_key: str = Field(default="", validation_alias="EVOLUTION_API_KEY")
+    openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
     elevenlabs_api_key: str = Field(default="", validation_alias="ELEVENLABS_API_KEY")
     nemo_guardrails_config_path: str = Field(
-        default="app/core/rails",
+        default="app/core/guardrails_config",
         validation_alias="NEMO_GUARDRAILS_CONFIG_PATH",
     )
 

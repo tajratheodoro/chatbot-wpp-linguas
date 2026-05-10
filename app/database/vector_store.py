@@ -18,6 +18,13 @@ class VectorStoreError(RuntimeError):
     """Raised when curriculum context retrieval fails."""
 
 
+def _require_openai_api_key(settings: Settings) -> str:
+    """Return the configured OpenAI API key or raise a safe error."""
+    if not settings.openai_api_key:
+        raise VectorStoreError("OPENAI_API_KEY is not configured")
+    return settings.openai_api_key
+
+
 class CurriculumVectorStore:
     """Asynchronous RAG context provider backed by PostgreSQL and pgvector."""
 
@@ -29,7 +36,10 @@ class CurriculumVectorStore:
     ) -> None:
         """Initialize the LangChain PGVector store from application settings."""
         self._settings = settings or get_settings()
-        self._embeddings = embeddings or OpenAIEmbeddings(model=EMBEDDING_MODEL)
+        self._embeddings = embeddings or OpenAIEmbeddings(
+            model=EMBEDDING_MODEL,
+            api_key=_require_openai_api_key(self._settings),
+        )
         self._vector_store = vector_store or PGVector(
             embeddings=self._embeddings,
             collection_name=COLLECTION_NAME,
