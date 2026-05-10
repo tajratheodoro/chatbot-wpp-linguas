@@ -25,8 +25,8 @@ class FakeWhatsAppClient:
 
 
 class FakeAudioEngine:
-    async def generate_audio_base64(self, text: str, voice_id: str) -> str:
-        _ = (text, voice_id)
+    async def generate_audio_base64(self, text: str) -> str:
+        _ = text
         return "audio-base64"
 
 

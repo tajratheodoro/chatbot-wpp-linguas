@@ -95,7 +95,7 @@ class AudioEngine:
             raise AudioProcessingError("empty audio transcription")
         return text
 
-    async def generate_audio_base64(self, text: str, voice_id: str) -> str:
+    async def generate_audio_base64(self, text: str, voice_id: str | None = None) -> str:
         """Generate Edge-TTS speech in a temporary .mp3 and return base64 audio."""
         normalized_text = text.strip()
         normalized_voice = (voice_id or EDGE_TTS_DEFAULT_VOICE).strip()
@@ -135,7 +135,7 @@ async def transcribe_audio_from_base64(base64_data: str) -> str:
     return await AudioEngine().transcribe_audio_from_base64(base64_data)
 
 
-async def generate_audio_base64(text: str, voice_id: str) -> str:
+async def generate_audio_base64(text: str, voice_id: str | None = None) -> str:
     """Generate base64-encoded speech using the default audio engine."""
     return await AudioEngine().generate_audio_base64(text=text, voice_id=voice_id)
 

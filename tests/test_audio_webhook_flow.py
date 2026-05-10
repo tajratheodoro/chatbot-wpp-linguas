@@ -19,15 +19,15 @@ class FakeAIOrchestrator:
 
 class FakeAudioEngine:
     def __init__(self) -> None:
-        self.generated: list[tuple[str, str]] = []
+        self.generated: list[str] = []
 
     async def transcribe_audio_from_base64(self, base64_data: str) -> str:
         if base64_data == "invalid-base64":
             raise ValueError("invalid base64 audio")
         return "I has a apple"
 
-    async def generate_audio_base64(self, text: str, voice_id: str) -> str:
-        self.generated.append((text, voice_id))
+    async def generate_audio_base64(self, text: str) -> str:
+        self.generated.append(text)
         return base64.b64encode(b"reply-audio").decode("ascii")
 
 
@@ -129,7 +129,7 @@ def test_webhook_transcribes_audio_before_ai_response(
     assert whatsapp_client.sent == [
         ("5511999999999@s.whatsapp.net", "corrigido: I has a apple")
     ]
-    assert audio_engine.generated == [("corrigido: I has a apple", "en-US-AriaNeural")]
+    assert audio_engine.generated == ["corrigido: I has a apple"]
     assert whatsapp_client.sent_audio == [
         (
             "5511999999999@s.whatsapp.net",

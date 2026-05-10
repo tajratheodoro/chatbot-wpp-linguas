@@ -7,7 +7,7 @@ from app.config import Settings, get_settings
 from app.database.connection import DatabaseConnectionError
 from app.database.vector_store import VectorStoreError
 from app.models.schemas import WebhookResponse, WhatsAppWebhookPayload
-from app.services.ai_orchestrator import AIOrchestrator
+from app.services.ai_orchestrator import AIOrchestrationError, AIOrchestrator
 from app.services.audio_engine import AudioEngine, AudioProcessingError
 from app.services.whatsapp_client import WhatsAppClient
 
@@ -22,6 +22,11 @@ def get_ai_orchestrator() -> AIOrchestrator:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="database is not configured",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI service is not configured",
         ) from exc
 
 
@@ -44,12 +49,11 @@ def get_audio_engine(settings: Settings = Depends(get_settings)) -> AudioEngine:
 @router.post("", response_model=WebhookResponse, status_code=status.HTTP_202_ACCEPTED)
 async def receive_webhook(
     payload: WhatsAppWebhookPayload,
-    settings: Settings = Depends(get_settings),
     ai_orchestrator: AIOrchestrator = Depends(get_ai_orchestrator),
     whatsapp_client: WhatsAppClient = Depends(get_whatsapp_client),
     audio_engine: AudioEngine = Depends(get_audio_engine),
 ) -> WebhookResponse:
-    """Process an incoming WhatsApp text message and send an AI response."""
+    """Process WhatsApp messages through RAG, text reply and audio reply."""
     if payload.event != "messages.upsert":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -64,10 +68,7 @@ async def receive_webhook(
         )
         ai_response = await ai_orchestrator.generate_response(incoming_text)
         await whatsapp_client.send_text_message(phone=payload.phone, text=ai_response)
-        audio_response = await audio_engine.generate_audio_base64(
-            text=ai_response,
-            voice_id=settings.edge_tts_voice,
-        )
+        audio_response = await audio_engine.generate_audio_base64(ai_response)
         await whatsapp_client.send_audio_message(
             phone=payload.phone,
             base64_audio=audio_response,
@@ -81,6 +82,11 @@ async def receive_webhook(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="curriculum context is unavailable",
+        ) from exc
+    except AIOrchestrationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="AI provider failed to generate a response",
         ) from exc
     except AudioProcessingError as exc:
         raise HTTPException(

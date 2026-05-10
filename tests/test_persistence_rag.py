@@ -53,3 +53,4 @@ async def test_orchestrator_searches_context_before_model_call() -> None:
     assert response == "Corrected answer"
     assert vector_store.queries == [("I has a apple", 3)]
     assert "Lesson context" in str(model.messages)
+    assert "Mensagem do aluno:" in str(model.messages)

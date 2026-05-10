@@ -49,7 +49,7 @@ async def test_generate_audio_base64_uses_edge_tts_tempfile_cleanup() -> None:
     settings = Settings(GROQ_API_KEY="test-key")
     engine = AudioEngine(settings=settings, tts_communicate_factory=FakeCommunicate)
 
-    result = await engine.generate_audio_base64("Short answer", "en-US-AriaNeural")
+    result = await engine.generate_audio_base64("Short answer")
 
     assert result == base64.b64encode(b"edge-audio").decode("ascii")
     assert FakeCommunicate.calls == [{"text": "Short answer", "voice": "en-US-AriaNeural"}]

@@ -9,7 +9,7 @@ from app.config import Settings, get_settings
 from app.core.guardrails import GuardrailsEngine
 from app.database.vector_store import CurriculumVectorStore
 
-SYSTEM_PERSONA = "Você é um professor de inglês rigoroso que corrige exercícios de alunos"
+SYSTEM_PERSONA = "Voce e um professor de ingles rigoroso que corrige exercicios de alunos"
 GROQ_CHAT_MODEL = "llama3-8b-8192"
 
 
@@ -25,6 +25,10 @@ class ChatModel(Protocol):
 
     async def ainvoke(self, input: Any) -> Any:
         """Invoke the chat model asynchronously."""
+
+
+class AIOrchestrationError(RuntimeError):
+    """Raised when the LLM response flow fails."""
 
 
 def _require_groq_api_key(settings: Settings) -> str:
@@ -59,9 +63,9 @@ class AIOrchestrator:
         settings: Settings | None = None,
     ) -> None:
         """Initialize the orchestrator with injectable model and safety boundaries."""
-        resolved_settings = settings or get_settings()
-        self._model = model or _create_groq_chat_model(resolved_settings)
-        self._vector_store = vector_store or CurriculumVectorStore(settings=resolved_settings)
+        self._settings = settings or get_settings()
+        self._model = model or _create_groq_chat_model(self._settings)
+        self._vector_store = vector_store
         self._guardrails_engine = guardrails_engine or GuardrailsEngine()
         self._prompt = ChatPromptTemplate.from_messages(
             [
@@ -69,30 +73,36 @@ class AIOrchestrator:
                 (
                     "human",
                     "Contexto curricular recuperado:\n{context}\n\n"
-                    "Mensagem do aluno:\n{message}\n\n"
-                    "Corrija o exercício com rigor e explique de forma objetiva.",
+                    "Mensagem do aluno:\n{question}\n\n"
+                    "Use o contexto quando ele for relevante. Corrija o exercicio "
+                    "com rigor e explique de forma objetiva.",
                 ),
             ]
         )
 
-    async def generate_response(self, message: str) -> str:
-        """Generate an AI response after validating input with guardrails."""
-        normalized_message = message.strip()
+    async def generate_response(self, student_message: str) -> str:
+        """Generate a RAG-grounded answer for a student's English exercise."""
+        normalized_message = student_message.strip()
         if not normalized_message:
             raise ValueError("message must not be empty")
 
         guardrails_check = await self._guardrails_engine.validate_input(normalized_message)
         if not guardrails_check.allowed:
-            return guardrails_check.response or "Vamos focar no exercício de inglês."
+            return guardrails_check.response or "Vamos focar no exercicio de ingles."
 
-        context = await self._vector_store.search_context(guardrails_check.message)
+        vector_store = self._vector_store or CurriculumVectorStore(settings=self._settings)
+        context = await vector_store.search_context(guardrails_check.message)
         prompt_value = await self._prompt.ainvoke(
             {
                 "context": context or "Nenhum contexto curricular encontrado.",
-                "message": guardrails_check.message,
+                "question": guardrails_check.message,
             }
         )
-        response = await self._model.ainvoke(prompt_value)
+        try:
+            response = await self._model.ainvoke(prompt_value)
+        except Exception as exc:
+            raise AIOrchestrationError("AI response generation failed") from exc
+
         content = response.content
         if isinstance(content, str):
             return content
