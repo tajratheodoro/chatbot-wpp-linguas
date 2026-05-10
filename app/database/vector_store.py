@@ -1,64 +1,85 @@
-"""LangChain PGVector integration for curriculum retrieval."""
+"""PostgreSQL pgvector integration for curriculum retrieval and ingestion."""
 
-import hashlib
-from typing import Final
+import asyncio
+from typing import Any, Final, Protocol
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_postgres import PGVector
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Settings, get_settings
-from app.database.connection import build_pgvector_database_url
+from app.database.connection import get_sessionmaker
+from app.models.db_models import CurriculumLesson
 
 COLLECTION_NAME: Final[str] = "curriculum_lessons"
-EMBEDDING_DIMENSION: Final[int] = 1536
+HUGGINGFACE_MODEL_NAME: Final[str] = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_DIMENSION: Final[int] = 384
 
 
 class VectorStoreError(RuntimeError):
-    """Raised when curriculum context retrieval fails."""
+    """Raised when curriculum context retrieval or ingestion fails."""
 
 
-class DeterministicHashEmbeddings(Embeddings):
-    """Free local embedding fallback with the configured pgvector dimension."""
+class AsyncSessionContext(Protocol):
+    """Protocol for async SQLAlchemy session context managers."""
 
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        """Embed documents locally without external API calls."""
-        return [self.embed_query(text) for text in texts]
+    async def __aenter__(self) -> Any:
+        """Enter the async session context."""
 
-    def embed_query(self, text: str) -> list[float]:
-        """Embed a query locally without external API calls."""
-        vector = [0.0] * EMBEDDING_DIMENSION
-        for token in text.casefold().split():
-            digest = hashlib.sha256(token.encode("utf-8")).digest()
-            index = int.from_bytes(digest[:4], "big") % EMBEDDING_DIMENSION
-            vector[index] += 1.0
+    async def __aexit__(self, *args: object) -> None:
+        """Exit the async session context."""
 
-        magnitude = sum(value * value for value in vector) ** 0.5
-        if magnitude == 0:
-            return vector
-        return [value / magnitude for value in vector]
+
+class AsyncSessionFactory(Protocol):
+    """Protocol for async SQLAlchemy session factories."""
+
+    def __call__(self) -> AsyncSessionContext:
+        """Create an async session context manager."""
 
 
 class CurriculumVectorStore:
-    """Asynchronous RAG context provider backed by PostgreSQL and pgvector."""
+    """RAG store backed by the custom `curriculum_lessons` pgvector table."""
 
     def __init__(
         self,
         settings: Settings | None = None,
         embeddings: Embeddings | None = None,
-        vector_store: PGVector | None = None,
+        session_factory: AsyncSessionFactory | None = None,
     ) -> None:
-        """Initialize the LangChain PGVector store from application settings."""
+        """Initialize the store with open-source Hugging Face embeddings."""
         self._settings = settings or get_settings()
-        self._embeddings = embeddings or DeterministicHashEmbeddings()
-        self._vector_store = vector_store or PGVector(
-            embeddings=self._embeddings,
-            collection_name=COLLECTION_NAME,
-            connection=build_pgvector_database_url(str(self._settings.database_url)),
-            embedding_length=EMBEDDING_DIMENSION,
-            use_jsonb=True,
-            async_mode=True,
-        )
+        self._embeddings = embeddings or _create_huggingface_embeddings()
+        self._session_factory = session_factory or get_sessionmaker(settings=self._settings)
+
+    async def add_lesson(self, title: str, content: str) -> int:
+        """Embed and persist a curriculum lesson for future RAG retrieval.
+
+        For best retrieval quality, `content` should include the complete
+        exercise statement, expected answer, target grammar/vocabulary topic,
+        common learner mistakes, and concise correction guidelines.
+        """
+        normalized_title = title.strip()
+        normalized_content = content.strip()
+        if not normalized_title:
+            raise VectorStoreError("lesson title must not be empty")
+        if not normalized_content:
+            raise VectorStoreError("lesson content must not be empty")
+
+        embedding = await asyncio.to_thread(self._embeddings.embed_query, normalized_content)
+        try:
+            async with self._session_factory() as session:
+                lesson = CurriculumLesson(
+                    lesson_title=normalized_title,
+                    content=normalized_content,
+                    embedding=embedding,
+                )
+                session.add(lesson)
+                await session.commit()
+                await session.refresh(lesson)
+                return int(lesson.id)
+        except SQLAlchemyError as exc:
+            raise VectorStoreError("curriculum lesson ingestion failed") from exc
 
     async def search_context(self, query: str, limit: int = 3) -> str:
         """Return curriculum context relevant to a student message."""
@@ -67,14 +88,25 @@ class CurriculumVectorStore:
             return ""
 
         safe_limit = max(1, min(limit, 10))
+        query_embedding = await asyncio.to_thread(self._embeddings.embed_query, normalized_query)
         try:
-            documents = await self._vector_store.asimilarity_search(
-                normalized_query,
-                k=safe_limit,
-            )
-        except Exception as exc:
+            async with self._session_factory() as session:
+                result = await session.execute(
+                    select(CurriculumLesson)
+                    .order_by(CurriculumLesson.embedding.cosine_distance(query_embedding))
+                    .limit(safe_limit)
+                )
+                lessons = list(result.scalars().all())
+        except SQLAlchemyError as exc:
             raise VectorStoreError("curriculum context search failed") from exc
 
+        documents = [
+            Document(
+                page_content=lesson.content,
+                metadata={"lesson_title": lesson.lesson_title, "id": lesson.id},
+            )
+            for lesson in lessons
+        ]
         return self._format_documents(documents)
 
     @staticmethod
@@ -86,3 +118,13 @@ class CurriculumVectorStore:
             prefix = f"[{index}] {title}" if title else f"[{index}]"
             chunks.append(f"{prefix}\n{document.page_content}")
         return "\n\n".join(chunks)
+
+
+def _create_huggingface_embeddings() -> Embeddings:
+    """Create all-MiniLM-L6-v2 embeddings from langchain-huggingface."""
+    try:
+        from langchain_huggingface import HuggingFaceEmbeddings
+    except ImportError as exc:
+        raise VectorStoreError("langchain-huggingface is not installed") from exc
+
+    return HuggingFaceEmbeddings(model_name=HUGGINGFACE_MODEL_NAME)

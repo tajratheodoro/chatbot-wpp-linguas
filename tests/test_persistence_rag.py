@@ -6,6 +6,7 @@ from app.database.connection import (
     build_pgvector_database_url,
     build_sqlalchemy_database_url,
 )
+from app.database.vector_store import EMBEDDING_DIMENSION
 from app.models.db_models import CurriculumLesson
 from app.services.ai_orchestrator import AIOrchestrator
 
@@ -31,7 +32,7 @@ class FakeChatModel:
 def test_curriculum_lesson_uses_embedding_dimension() -> None:
     embedding_column = CurriculumLesson.__table__.columns["embedding"]
 
-    assert embedding_column.type.dim == 1536
+    assert embedding_column.type.dim == EMBEDDING_DIMENSION
 
 
 def test_database_url_driver_conversion_keeps_credentials_external() -> None:

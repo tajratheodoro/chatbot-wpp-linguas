@@ -9,6 +9,42 @@ class HealthResponse(BaseModel):
     status: str
 
 
+class LessonCreate(BaseModel):
+    """Admin payload for adding an English exercise to the RAG curriculum.
+
+    The ideal `content` combines the full exercise statement, target grammar or
+    vocabulary topic, expected answer, common mistakes, and correction
+    guidelines. Keeping those parts together improves future retrieval because
+    the embedding captures both the student-facing prompt and the teacher rubric.
+    """
+
+    title: str = Field(min_length=3, max_length=180)
+    content: str = Field(
+        min_length=20,
+        description=(
+            "Enunciado do exercício de inglês, resposta esperada e diretrizes "
+            "de correção para melhorar a precisão do RAG."
+        ),
+    )
+
+    @field_validator("title", "content")
+    @classmethod
+    def strip_text_fields(cls, value: str) -> str:
+        """Normalize lesson text fields and reject whitespace-only values."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("field must not be empty")
+        return normalized
+
+
+class LessonCreatedResponse(BaseModel):
+    """Response returned after storing a curriculum lesson."""
+
+    id: int
+    title: str
+    status: str = "created"
+
+
 class EvolutionMessageKey(BaseModel):
     """Message key metadata sent by Evolution API."""
 

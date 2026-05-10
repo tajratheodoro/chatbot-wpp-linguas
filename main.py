@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.curriculum import router as curriculum_router
 from app.api.health import router as health_router
 from app.api.webhook import router as webhook_router
 from app.config import get_settings
@@ -32,9 +33,9 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health_router, prefix=settings.api_prefix)
+    app.include_router(curriculum_router, prefix=settings.api_prefix)
     app.include_router(webhook_router, prefix=settings.api_prefix)
     return app
 
 
 app = create_app()
-

@@ -4,6 +4,7 @@ pydantic-settings
 langchain
 langchain-core
 langchain-groq
+langchain-huggingface
 langchain-postgres
 sqlalchemy
 asyncpg
@@ -14,5 +15,6 @@ python-dotenv
 nemoguardrails
 groq
 edge-tts
+sentence-transformers
 pytest
 pytest-asyncio

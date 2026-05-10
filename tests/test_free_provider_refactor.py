@@ -1,5 +1,5 @@
 from app.config.settings import Settings
-from app.database.vector_store import DeterministicHashEmbeddings
+from app.database.vector_store import EMBEDDING_DIMENSION, HUGGINGFACE_MODEL_NAME
 
 
 def test_settings_exposes_groq_and_edge_tts_without_paid_provider_keys() -> None:
@@ -11,10 +11,6 @@ def test_settings_exposes_groq_and_edge_tts_without_paid_provider_keys() -> None
     assert not hasattr(settings, "elevenlabs_api_key")
 
 
-def test_local_embedding_fallback_matches_pgvector_dimension() -> None:
-    embeddings = DeterministicHashEmbeddings()
-
-    vector = embeddings.embed_query("english lesson")
-
-    assert len(vector) == 1536
-    assert any(value != 0.0 for value in vector)
+def test_open_source_embeddings_match_pgvector_dimension() -> None:
+    assert HUGGINGFACE_MODEL_NAME == "sentence-transformers/all-MiniLM-L6-v2"
+    assert EMBEDDING_DIMENSION == 384

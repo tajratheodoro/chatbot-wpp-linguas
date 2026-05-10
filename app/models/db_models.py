@@ -19,4 +19,4 @@ class CurriculumLesson(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     lesson_title: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[Any] = mapped_column(Vector(1536), nullable=False)
+    embedding: Mapped[Any] = mapped_column(Vector(384), nullable=False)
