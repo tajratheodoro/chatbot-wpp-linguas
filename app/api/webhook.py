@@ -4,6 +4,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.config import Settings, get_settings
+from app.database.connection import DatabaseConnectionError
+from app.database.vector_store import VectorStoreError
 from app.models.schemas import WebhookResponse, WhatsAppWebhookPayload
 from app.services.ai_orchestrator import AIOrchestrator
 from app.services.whatsapp_client import WhatsAppClient
@@ -13,7 +15,13 @@ router = APIRouter(prefix="/webhook", tags=["webhook"])
 
 def get_ai_orchestrator() -> AIOrchestrator:
     """Create the AI orchestrator dependency."""
-    return AIOrchestrator()
+    try:
+        return AIOrchestrator()
+    except DatabaseConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="database is not configured",
+        ) from exc
 
 
 def get_whatsapp_client(settings: Settings = Depends(get_settings)) -> WhatsAppClient:
@@ -41,6 +49,11 @@ async def receive_webhook(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
+        ) from exc
+    except VectorStoreError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="curriculum context is unavailable",
         ) from exc
     except httpx.HTTPStatusError as exc:
         raise HTTPException(

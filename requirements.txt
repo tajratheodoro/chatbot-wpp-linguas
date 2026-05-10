@@ -4,9 +4,14 @@ pydantic-settings
 langchain
 langchain-core
 langchain-openai
+langchain-postgres
+sqlalchemy
 asyncpg
+psycopg[binary]
 pgvector
 httpx
 python-dotenv
 nemoguardrails
 elevenlabs
+pytest
+pytest-asyncio

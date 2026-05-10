@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from pydantic import Field, PostgresDsn
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,10 +14,7 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
     api_prefix: str = "/api"
 
-    database_url: PostgresDsn | str = Field(
-        default="postgresql://postgres:postgres@localhost:5432/chatbot",
-        validation_alias="DATABASE_URL",
-    )
+    database_url: str = Field(default="", validation_alias="DATABASE_URL")
     evolution_api_url: str = Field(
         default="http://localhost:8080",
         validation_alias="EVOLUTION_API_URL",
@@ -41,4 +38,3 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Return cached application settings."""
     return Settings()
-
