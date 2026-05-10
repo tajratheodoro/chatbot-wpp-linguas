@@ -4,13 +4,13 @@ from typing import Any, Protocol
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 
 from app.config import Settings, get_settings
 from app.core.guardrails import GuardrailsEngine
 from app.database.vector_store import CurriculumVectorStore
 
 SYSTEM_PERSONA = "Você é um professor de inglês rigoroso que corrige exercícios de alunos"
+GROQ_CHAT_MODEL = "llama3-8b-8192"
 
 
 class ContextStore(Protocol):
@@ -27,11 +27,25 @@ class ChatModel(Protocol):
         """Invoke the chat model asynchronously."""
 
 
-def _require_openai_api_key(settings: Settings) -> str:
-    """Return the configured OpenAI API key or raise a safe error."""
-    if not settings.openai_api_key:
-        raise ValueError("OPENAI_API_KEY is not configured")
-    return settings.openai_api_key
+def _require_groq_api_key(settings: Settings) -> str:
+    """Return the configured Groq API key or raise a safe error."""
+    if not settings.groq_api_key:
+        raise ValueError("GROQ_API_KEY is not configured")
+    return settings.groq_api_key
+
+
+def _create_groq_chat_model(settings: Settings) -> BaseChatModel:
+    """Create a ChatGroq model using only settings-managed credentials."""
+    try:
+        from langchain_groq import ChatGroq
+    except ImportError as exc:
+        raise ValueError("langchain-groq is not installed") from exc
+
+    return ChatGroq(
+        model=GROQ_CHAT_MODEL,
+        temperature=0.2,
+        api_key=_require_groq_api_key(settings),
+    )
 
 
 class AIOrchestrator:
@@ -46,11 +60,7 @@ class AIOrchestrator:
     ) -> None:
         """Initialize the orchestrator with injectable model and safety boundaries."""
         resolved_settings = settings or get_settings()
-        self._model = model or ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=0.2,
-            api_key=_require_openai_api_key(resolved_settings),
-        )
+        self._model = model or _create_groq_chat_model(resolved_settings)
         self._vector_store = vector_store or CurriculumVectorStore(settings=resolved_settings)
         self._guardrails_engine = guardrails_engine or GuardrailsEngine()
         self._prompt = ChatPromptTemplate.from_messages(

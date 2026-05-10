@@ -28,7 +28,7 @@ class FakeChatModel:
         return SimpleNamespace(content="Corrected answer")
 
 
-def test_curriculum_lesson_uses_openai_embedding_dimension() -> None:
+def test_curriculum_lesson_uses_embedding_dimension() -> None:
     embedding_column = CurriculumLesson.__table__.columns["embedding"]
 
     assert embedding_column.type.dim == 1536

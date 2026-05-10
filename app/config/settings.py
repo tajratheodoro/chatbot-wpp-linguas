@@ -20,8 +20,8 @@ class Settings(BaseSettings):
         validation_alias="EVOLUTION_API_URL",
     )
     evolution_api_key: str = Field(default="", validation_alias="EVOLUTION_API_KEY")
-    openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
-    elevenlabs_api_key: str = Field(default="", validation_alias="ELEVENLABS_API_KEY")
+    groq_api_key: str = Field(default="", validation_alias="GROQ_API_KEY")
+    edge_tts_voice: str = Field(default="en-US-AriaNeural", validation_alias="EDGE_TTS_VOICE")
     nemo_guardrails_config_path: str = Field(
         default="app/core/guardrails_config",
         validation_alias="NEMO_GUARDRAILS_CONFIG_PATH",

@@ -1,7 +1,7 @@
 models:
   - type: main
-    engine: openai
-    model: gpt-4o-mini
+    engine: groq
+    model: llama3-8b-8192
 
 instructions:
   - type: general

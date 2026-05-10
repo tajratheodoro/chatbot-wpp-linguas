@@ -1,16 +1,16 @@
 """LangChain PGVector integration for curriculum retrieval."""
 
+import hashlib
 from typing import Final
 
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
+from langchain_core.embeddings import Embeddings
 from langchain_postgres import PGVector
 
 from app.config import Settings, get_settings
 from app.database.connection import build_pgvector_database_url
 
 COLLECTION_NAME: Final[str] = "curriculum_lessons"
-EMBEDDING_MODEL: Final[str] = "text-embedding-3-small"
 EMBEDDING_DIMENSION: Final[int] = 1536
 
 
@@ -18,11 +18,25 @@ class VectorStoreError(RuntimeError):
     """Raised when curriculum context retrieval fails."""
 
 
-def _require_openai_api_key(settings: Settings) -> str:
-    """Return the configured OpenAI API key or raise a safe error."""
-    if not settings.openai_api_key:
-        raise VectorStoreError("OPENAI_API_KEY is not configured")
-    return settings.openai_api_key
+class DeterministicHashEmbeddings(Embeddings):
+    """Free local embedding fallback with the configured pgvector dimension."""
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Embed documents locally without external API calls."""
+        return [self.embed_query(text) for text in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        """Embed a query locally without external API calls."""
+        vector = [0.0] * EMBEDDING_DIMENSION
+        for token in text.casefold().split():
+            digest = hashlib.sha256(token.encode("utf-8")).digest()
+            index = int.from_bytes(digest[:4], "big") % EMBEDDING_DIMENSION
+            vector[index] += 1.0
+
+        magnitude = sum(value * value for value in vector) ** 0.5
+        if magnitude == 0:
+            return vector
+        return [value / magnitude for value in vector]
 
 
 class CurriculumVectorStore:
@@ -31,15 +45,12 @@ class CurriculumVectorStore:
     def __init__(
         self,
         settings: Settings | None = None,
-        embeddings: OpenAIEmbeddings | None = None,
+        embeddings: Embeddings | None = None,
         vector_store: PGVector | None = None,
     ) -> None:
         """Initialize the LangChain PGVector store from application settings."""
         self._settings = settings or get_settings()
-        self._embeddings = embeddings or OpenAIEmbeddings(
-            model=EMBEDDING_MODEL,
-            api_key=_require_openai_api_key(self._settings),
-        )
+        self._embeddings = embeddings or DeterministicHashEmbeddings()
         self._vector_store = vector_store or PGVector(
             embeddings=self._embeddings,
             collection_name=COLLECTION_NAME,

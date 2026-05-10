@@ -3,7 +3,7 @@ uvicorn[standard]
 pydantic-settings
 langchain
 langchain-core
-langchain-openai
+langchain-groq
 langchain-postgres
 sqlalchemy
 asyncpg
@@ -12,6 +12,7 @@ pgvector
 httpx
 python-dotenv
 nemoguardrails
-elevenlabs
+groq
+edge-tts
 pytest
 pytest-asyncio

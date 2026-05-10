@@ -111,10 +111,10 @@ class GuardrailsEngine:
 
 
 @lru_cache(maxsize=1)
-def _get_guardrails_app_cached(config_path: str, openai_api_key: str) -> GuardrailsApp:
+def _get_guardrails_app_cached(config_path: str, groq_api_key: str) -> GuardrailsApp:
     """Initialize and cache the NeMo Guardrails app."""
-    if not openai_api_key:
-        raise GuardrailsInitializationError("OPENAI_API_KEY is not configured")
+    if not groq_api_key:
+        raise GuardrailsInitializationError("GROQ_API_KEY is not configured")
 
     try:
         from nemoguardrails import LLMRails, RailsConfig
@@ -130,7 +130,7 @@ async def get_guardrails_app(settings: Settings | None = None) -> GuardrailsApp:
     resolved_settings = settings or get_settings()
     return _get_guardrails_app_cached(
         resolved_settings.nemo_guardrails_config_path,
-        resolved_settings.openai_api_key,
+        resolved_settings.groq_api_key,
     )
 
 
