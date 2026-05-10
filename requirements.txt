@@ -3,10 +3,10 @@ uvicorn[standard]
 pydantic-settings
 langchain
 langchain-core
+langchain-openai
 asyncpg
 pgvector
 httpx
 python-dotenv
 nemoguardrails
 elevenlabs
-

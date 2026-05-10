@@ -1,48 +1,32 @@
-"""AI orchestration service built on LangChain runnables."""
+"""AI orchestration service built on LangChain chat models."""
 
-from typing import Any
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import Runnable, RunnableLambda
+SYSTEM_PERSONA = "Você é um professor de inglês rigoroso que corrige exercícios de alunos"
 
 
 class AIOrchestrator:
-    """Coordinate prompt construction and asynchronous model execution."""
+    """Coordinate asynchronous AI responses for incoming WhatsApp messages."""
 
-    def __init__(self, model: Runnable[Any, Any] | None = None) -> None:
-        """Initialize the orchestrator with an optional LangChain-compatible model."""
-        self._prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    "You are a helpful English tutor on WhatsApp. "
-                    "Correct exercises clearly and keep responses concise.",
-                ),
-                (
-                    "human",
-                    "Conversation id: {conversation_id}\nStudent message: {message}",
-                ),
-            ]
-        )
-        self._model = model or RunnableLambda(self._fallback_response)
-        self._chain: Runnable[dict[str, str], str] = self._prompt | self._model | StrOutputParser()
+    def __init__(self, model: BaseChatModel | None = None) -> None:
+        """Initialize the orchestrator with an injectable LangChain chat model."""
+        self._model = model or ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
 
-    async def generate_response(self, message: str, conversation_id: str | None = None) -> str:
+    async def generate_response(self, message: str) -> str:
         """Generate an AI response asynchronously for a WhatsApp message."""
         normalized_message = message.strip()
         if not normalized_message:
             raise ValueError("message must not be empty")
 
-        return await self._chain.ainvoke(
-            {
-                "conversation_id": conversation_id or "anonymous",
-                "message": normalized_message,
-            }
+        response = await self._model.ainvoke(
+            [
+                SystemMessage(content=SYSTEM_PERSONA),
+                HumanMessage(content=normalized_message),
+            ]
         )
-
-    async def _fallback_response(self, prompt_value: Any) -> str:
-        """Return a deterministic response when no external LLM is injected."""
-        _ = prompt_value
-        return "Recebi sua mensagem. Em breve vou corrigir o exercício com mais detalhes."
-
+        content = response.content
+        if isinstance(content, str):
+            return content
+        return str(content)
