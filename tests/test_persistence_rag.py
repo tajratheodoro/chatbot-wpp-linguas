@@ -29,6 +29,18 @@ class FakeChatModel:
         return SimpleNamespace(content="Corrected answer")
 
 
+class FakeHistory:
+    async def aget_messages(self) -> list[object]:
+        return []
+
+    async def aadd_messages(self, messages: list[object]) -> None:
+        return None
+
+
+def fake_history_factory(session_id: str) -> FakeHistory:
+    return FakeHistory()
+
+
 def test_curriculum_lesson_uses_embedding_dimension() -> None:
     embedding_column = CurriculumLesson.__table__.columns["embedding"]
 
@@ -46,9 +58,16 @@ def test_database_url_driver_conversion_keeps_credentials_external() -> None:
 async def test_orchestrator_searches_context_before_model_call() -> None:
     vector_store = FakeVectorStore()
     model = FakeChatModel()
-    orchestrator = AIOrchestrator(model=model, vector_store=vector_store)
+    orchestrator = AIOrchestrator(
+        model=model,
+        vector_store=vector_store,
+        history_factory=fake_history_factory,
+    )
 
-    response = await orchestrator.generate_response("I has a apple")
+    response = await orchestrator.generate_response(
+        student_message="I has a apple",
+        session_id="5511999999999@s.whatsapp.net",
+    )
 
     assert response == "Corrected answer"
     assert vector_store.queries == [("I has a apple", 3)]

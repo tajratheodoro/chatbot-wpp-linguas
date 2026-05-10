@@ -6,8 +6,8 @@ from main import app
 
 
 class FakeAIOrchestrator:
-    async def generate_response(self, message: str) -> str:
-        return f"corrigido: {message}"
+    async def generate_response(self, student_message: str, session_id: str) -> str:
+        return f"corrigido: {student_message} ({session_id})"
 
 
 class FakeWhatsAppClient:
@@ -64,7 +64,10 @@ def test_webhook_extracts_message_and_replies(whatsapp_client: FakeWhatsAppClien
         "phone": "5511999999999@s.whatsapp.net",
     }
     assert whatsapp_client.sent == [
-        ("5511999999999@s.whatsapp.net", "corrigido: I has a apple")
+        (
+            "5511999999999@s.whatsapp.net",
+            "corrigido: I has a apple (5511999999999@s.whatsapp.net)",
+        )
     ]
 
 

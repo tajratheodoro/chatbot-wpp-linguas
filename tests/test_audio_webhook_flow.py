@@ -12,9 +12,9 @@ class FakeAIOrchestrator:
     def __init__(self) -> None:
         self.messages: list[str] = []
 
-    async def generate_response(self, message: str) -> str:
-        self.messages.append(message)
-        return f"corrigido: {message}"
+    async def generate_response(self, student_message: str, session_id: str) -> str:
+        self.messages.append(f"{session_id}:{student_message}")
+        return f"corrigido: {student_message}"
 
 
 class FakeAudioEngine:
@@ -124,7 +124,7 @@ def test_webhook_transcribes_audio_before_ai_response(
     response = TestClient(app).post("/api/webhook", json=payload)
 
     assert response.status_code == 202
-    assert ai_orchestrator.messages == ["I has a apple"]
+    assert ai_orchestrator.messages == ["5511999999999@s.whatsapp.net:I has a apple"]
     assert whatsapp_client.media_requests == ["MSG123"]
     assert whatsapp_client.sent == [
         ("5511999999999@s.whatsapp.net", "corrigido: I has a apple")

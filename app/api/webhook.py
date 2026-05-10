@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.config import Settings, get_settings
 from app.database.connection import DatabaseConnectionError
+from app.database.memory import ChatMemoryError
 from app.database.vector_store import VectorStoreError
 from app.models.schemas import WebhookResponse, WhatsAppWebhookPayload
 from app.services.ai_orchestrator import AIOrchestrationError, AIOrchestrator
@@ -66,7 +67,10 @@ async def receive_webhook(
             whatsapp_client=whatsapp_client,
             audio_engine=audio_engine,
         )
-        ai_response = await ai_orchestrator.generate_response(incoming_text)
+        ai_response = await ai_orchestrator.generate_response(
+            student_message=incoming_text,
+            session_id=payload.phone,
+        )
         await whatsapp_client.send_text_message(phone=payload.phone, text=ai_response)
         audio_response = await audio_engine.generate_audio_base64(ai_response)
         await whatsapp_client.send_audio_message(
@@ -82,6 +86,11 @@ async def receive_webhook(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="curriculum context is unavailable",
+        ) from exc
+    except (ChatMemoryError, DatabaseConnectionError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="conversation memory is unavailable",
         ) from exc
     except AIOrchestrationError as exc:
         raise HTTPException(
