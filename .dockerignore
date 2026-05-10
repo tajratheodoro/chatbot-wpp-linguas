@@ -1,0 +1,27 @@
+# Segredos e configuracoes locais nunca entram no contexto da imagem.
+.env
+.env.*
+
+# Ambientes virtuais e caches Python.
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Testes e artefatos locais fora do runtime.
+tests/
+htmlcov/
+.coverage
+coverage.xml
+
+# Metadados de VCS e arquivos temporarios.
+.git/
+.gitignore
+*.log
+tmp/
+temp/
+docker/

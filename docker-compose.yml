@@ -1,0 +1,48 @@
+services:
+  db:
+    # Imagem PostgreSQL com extensao pgvector ja disponivel.
+    image: pgvector/pgvector:pg16
+    container_name: chatbot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Volume nomeado preserva aulas, embeddings e historico entre reinicios.
+      - chatbot_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    # Build local usa o Dockerfile multi-stage e herda configuracoes do .env.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chatbot-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      EDGE_TTS_VOICE: ${EDGE_TTS_VOICE:-en-US-AriaNeural}
+      APP_ENV: ${APP_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  chatbot_pg_data:
